@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\API\TblLitControllerLtoController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\TblLitCycleController;
@@ -33,4 +34,17 @@ Route::prefix('lit')->group(function () {
     Route::patch('/cycles/{id}/activate', [TblLitCycleController::class, 'activate']);
     Route::patch('/cycles/{id}/deactivate', [TblLitCycleController::class, 'deactivate']);
     Route::delete('/cycles/{id}', [TblLitCycleController::class, 'destroy']);
+});
+
+// Litigation Users - Eligible for Assignment
+Route::get('/lit/users/eligible', [\App\Http\Controllers\API\TblLitUserController::class, 'getEligibleUsers']);
+
+// Controller-LTO Assignment Management
+Route::prefix('lit/controller-assignments')->group(function () {
+    Route::get('/', [TblLitControllerLtoController::class, 'index']);
+    Route::post('/', [TblLitControllerLtoController::class, 'store']);
+    Route::get('/{id}', [TblLitControllerLtoController::class, 'show']);
+    Route::put('/{id}', [TblLitControllerLtoController::class, 'update']);
+    Route::patch('/{id}/toggle-active', [TblLitControllerLtoController::class, 'toggleActive']);
+    Route::delete('/{id}', [TblLitControllerLtoController::class, 'destroy']);
 });

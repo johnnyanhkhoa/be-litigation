@@ -356,15 +356,21 @@ class TblLitCycleController extends Controller
             DB::beginTransaction();
 
             // Deactivate all other active cycles
-            TblLitCycle::notDeleted()
+            $otherActiveCycles = TblLitCycle::notDeleted()
                 ->where('cycleActive', true)
-                ->update([
+                ->where('cycleId', '!=', $id)
+                ->get();
+
+            foreach ($otherActiveCycles as $otherCycle) {
+                $otherCycle->update([
                     'cycleActive' => false,
                     'deactivatedAt' => now(),
                     'deactivatedBy' => $request->user_id,
+                    'deactivatedReason' => "Auto-deactivated when activating cycle {$id}",
                     'updatedAt' => now(),
                     'updatedBy' => $request->user_id
                 ]);
+            }
 
             Log::info('All litigation cycles deactivated before activating new cycle', [
                 'deactivated_by' => $request->user_id
@@ -375,6 +381,7 @@ class TblLitCycleController extends Controller
                 'cycleActive' => true,
                 'deactivatedAt' => null,
                 'deactivatedBy' => null,
+                'deactivatedReason' => null,  // ← THÊM dòng này
                 'updatedAt' => now(),
                 'updatedBy' => $request->user_id
             ]);
@@ -416,7 +423,8 @@ class TblLitCycleController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'user_id' => 'required'
+                'user_id' => 'required',
+                'deactivatedReason' => 'nullable|string|max:255'
             ]);
 
             if ($validator->fails()) {
@@ -445,6 +453,7 @@ class TblLitCycleController extends Controller
                 'cycleActive' => false,
                 'deactivatedAt' => now(),
                 'deactivatedBy' => $request->user_id,
+                'deactivatedReason' => $request->deactivatedReason,  // ← THÊM dòng này
                 'updatedAt' => now(),
                 'updatedBy' => $request->user_id
             ]);

@@ -17,6 +17,7 @@ class TblLitCycle extends Model
         'cycleActive',
         'deactivatedAt',
         'deactivatedBy',
+        'deactivatedReason',
         'cycleWriteOffActive',
         'cycleAmcContractActive',
         'cycleRemark',

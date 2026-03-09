@@ -1,0 +1,334 @@
+<?php
+
+namespace App\Http\Controllers\API;
+
+use App\Http\Controllers\Controller;
+use App\Models\TblLitPhoneCollection;
+use App\Models\TblLitCycle;
+use App\Services\UserReferenceService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+use Exception;
+
+class TblLitPhoneCollectionController extends Controller
+{
+    protected $userRefService;
+
+    public function __construct(UserReferenceService $userRefService)
+    {
+        $this->userRefService = $userRefService;
+    }
+
+    /**
+     * POST /api/lit/phone-collections
+     * Create single or multiple phone collections
+     */
+    public function store(Request $request): JsonResponse
+    {
+        try {
+            // Validate input structure
+            $validator = Validator::make($request->all(), [
+                'user_id' => 'required|integer',
+                'collections' => 'required|array|min:1',
+                'collections.*.litCaseId' => 'nullable|integer',
+                'collections.*.status' => 'nullable|string|max:255',
+                'collections.*.contractId' => 'nullable|integer',
+                'collections.*.customerId' => 'nullable|integer',
+                'collections.*.paymentId' => 'nullable|integer',
+                'collections.*.paymentNo' => 'nullable|integer',
+                'collections.*.assetId' => 'nullable|integer',
+                'collections.*.dueDate' => 'nullable|date_format:Y-m-d',
+                'collections.*.daysOverdueGross' => 'nullable|integer',
+                'collections.*.daysOverdueNet' => 'nullable|integer',
+                'collections.*.daysSinceLastPayment' => 'nullable|integer',
+                'collections.*.totalOvdAmount' => 'nullable|integer',
+                'collections.*.contractNo' => 'nullable|string|max:255',
+                'collections.*.contractDate' => 'nullable|date_format:Y-m-d',
+                'collections.*.contractType' => 'nullable|string|max:255',
+                'collections.*.contractingProductType' => 'nullable|string|max:255',
+                'collections.*.customerFullName' => 'nullable|string|max:255',
+                'collections.*.gender' => 'nullable|string|max:50',
+                'collections.*.birthDate' => 'nullable|date_format:Y-m-d',
+                'collections.*.cycleId' => 'required|integer|exists:tbl_LitCycle,cycleId',
+                'collections.*.hasKYCAppAccount' => 'nullable|boolean',
+                'collections.*.customerAge' => 'nullable|integer',
+                'collections.*.contractPlaceName' => 'nullable|string|max:255',
+                'collections.*.salesAreaName' => 'nullable|string|max:255',
+                'collections.*.productName' => 'nullable|string|max:255',
+                'collections.*.productColor' => 'nullable|string|max:255',
+                'collections.*.plateNo' => 'nullable|string|max:255',
+                'collections.*.unitPrice' => 'nullable|string|max:255',
+                'collections.*.paymentStatus' => 'nullable|string|max:255',
+                'collections.*.phoneNo1' => 'nullable|string|max:255',
+                'collections.*.phoneNo2' => 'nullable|string|max:255',
+                'collections.*.phoneNo3' => 'nullable|string|max:255',
+                'collections.*.homeAddress' => 'nullable|string|max:500',
+                'collections.*.salesAreaId' => 'nullable|integer',
+                'collections.*.contractPlaceId' => 'nullable|integer',
+                'collections.*.lastPaymentDate' => 'nullable|date_format:Y-m-d',
+                'collections.*.beelineDistance' => 'nullable|numeric',
+                'collections.*.deviceControlProvider' => 'nullable|string|max:255',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Ensure user exists
+            $this->userRefService->ensureUserExists($request->user_id);
+
+            DB::beginTransaction();
+
+            $created = [];
+            $errors = [];
+
+            foreach ($request->collections as $index => $collectionData) {
+                try {
+                    // Prepare data for creation (exclude restricted fields)
+                    $data = [
+                        'litCaseId' => $collectionData['litCaseId'] ?? null,
+                        'status' => $collectionData['status'] ?? 'pending',
+                        'contractId' => $collectionData['contractId'] ?? null,
+                        'customerId' => $collectionData['customerId'] ?? null,
+                        'paymentId' => $collectionData['paymentId'] ?? null,
+                        'paymentNo' => $collectionData['paymentNo'] ?? null,
+                        'assetId' => $collectionData['assetId'] ?? null,
+                        'dueDate' => $collectionData['dueDate'] ?? null,
+                        'daysOverdueGross' => $collectionData['daysOverdueGross'] ?? null,
+                        'daysOverdueNet' => $collectionData['daysOverdueNet'] ?? null,
+                        'daysSinceLastPayment' => $collectionData['daysSinceLastPayment'] ?? null,
+                        'totalOvdAmount' => $collectionData['totalOvdAmount'] ?? null,
+                        'contractNo' => $collectionData['contractNo'] ?? null,
+                        'contractDate' => $collectionData['contractDate'] ?? null,
+                        'contractType' => $collectionData['contractType'] ?? null,
+                        'contractingProductType' => $collectionData['contractingProductType'] ?? null,
+                        'customerFullName' => $collectionData['customerFullName'] ?? null,
+                        'gender' => $collectionData['gender'] ?? null,
+                        'birthDate' => $collectionData['birthDate'] ?? null,
+                        'cycleId' => $collectionData['cycleId'],
+                        'hasKYCAppAccount' => $collectionData['hasKYCAppAccount'] ?? false,
+                        'customerAge' => $collectionData['customerAge'] ?? null,
+                        'contractPlaceName' => $collectionData['contractPlaceName'] ?? null,
+                        'salesAreaName' => $collectionData['salesAreaName'] ?? null,
+                        'productName' => $collectionData['productName'] ?? null,
+                        'productColor' => $collectionData['productColor'] ?? null,
+                        'plateNo' => $collectionData['plateNo'] ?? null,
+                        'unitPrice' => $collectionData['unitPrice'] ?? null,
+                        'paymentStatus' => $collectionData['paymentStatus'] ?? null,
+                        'phoneNo1' => $collectionData['phoneNo1'] ?? null,
+                        'phoneNo2' => $collectionData['phoneNo2'] ?? null,
+                        'phoneNo3' => $collectionData['phoneNo3'] ?? null,
+                        'homeAddress' => $collectionData['homeAddress'] ?? null,
+                        'salesAreaId' => $collectionData['salesAreaId'] ?? null,
+                        'contractPlaceId' => $collectionData['contractPlaceId'] ?? null,
+                        'lastPaymentDate' => $collectionData['lastPaymentDate'] ?? null,
+                        'beelineDistance' => $collectionData['beelineDistance'] ?? null,
+                        'deviceControlProvider' => $collectionData['deviceControlProvider'] ?? null,
+
+                        // System fields (auto-set)
+                        'assignedTo' => null,
+                        'assignedBy' => null,
+                        'assignedAt' => null,
+                        'totalAttempts' => 0,
+                        'lastAttemptAt' => null,
+                        'lastAttemptBy' => null,
+                        'createdAt' => now()->timezone('Asia/Yangon'),
+                        'createdBy' => $request->user_id,
+                        'updatedAt' => null,
+                        'updatedBy' => null,
+                        'deletedAt' => null,
+                        'deletedBy' => null,
+                        'deletedReason' => null,
+                        'completedBy' => null,
+                        'completedAt' => null,
+                    ];
+
+                    $collection = TblLitPhoneCollection::create($data);
+                    $created[] = $collection;
+
+                } catch (Exception $e) {
+                    $errors[] = [
+                        'index' => $index,
+                        'contractNo' => $collectionData['contractNo'] ?? 'unknown',
+                        'error' => $e->getMessage()
+                    ];
+                }
+            }
+
+            DB::commit();
+
+            Log::info('Litigation phone collections created', [
+                'total_requested' => count($request->collections),
+                'created' => count($created),
+                'failed' => count($errors),
+                'created_by' => $request->user_id
+            ]);
+
+            $response = [
+                'success' => true,
+                'message' => 'Litigation phone collections created',
+                'summary' => [
+                    'total_requested' => count($request->collections),
+                    'created' => count($created),
+                    'failed' => count($errors)
+                ],
+                'data' => $created
+            ];
+
+            if (!empty($errors)) {
+                $response['errors'] = $errors;
+            }
+
+            return response()->json($response, 201);
+
+        } catch (Exception $e) {
+            DB::rollBack();
+
+            Log::error('Failed to create litigation phone collections', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create litigation phone collections',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * GET /api/lit/phone-collections
+     * Get litigation phone collections with filters
+     */
+    public function index(Request $request): JsonResponse
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'status' => 'nullable|string',
+                'assignedTo' => 'nullable|integer',
+                'cycleId' => 'nullable|integer',
+                'page' => 'nullable|integer|min:1',
+                'per_page' => 'nullable|integer|min:1|max:100',
+                'assignedAtFrom' => 'nullable|date_format:Y-m-d',
+                'assignedAtTo' => 'nullable|date_format:Y-m-d|after_or_equal:assignedAtFrom',
+                'customerFullName' => 'nullable|string',
+                'contractNo' => 'nullable|string',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $query = TblLitPhoneCollection::notDeleted();
+
+            // Filter by status
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
+
+            // Filter by assignedTo
+            if ($request->has('assignedTo')) {
+                $query->where('assignedTo', $request->assignedTo);
+            }
+
+            // Filter by cycleId
+            if ($request->has('cycleId')) {
+                $query->where('cycleId', $request->cycleId);
+            }
+
+            // Filter by assignedAt date range
+            if ($request->has('assignedAtFrom')) {
+                $assignedAtFrom = $request->assignedAtFrom . ' 00:00:00';
+                $query->where('assignedAt', '>=', $assignedAtFrom);
+            }
+
+            if ($request->has('assignedAtTo')) {
+                $assignedAtTo = $request->assignedAtTo . ' 23:59:59';
+                $query->where('assignedAt', '<=', $assignedAtTo);
+            }
+
+            // Filter by customerFullName (partial match)
+            if ($request->has('customerFullName')) {
+                $query->where('customerFullName', 'ILIKE', '%' . $request->customerFullName . '%');
+            }
+
+            // Filter by contractNo (exact or partial match)
+            if ($request->has('contractNo')) {
+                $query->where('contractNo', 'ILIKE', '%' . $request->contractNo . '%');
+            }
+
+            // Get total before pagination
+            $total = $query->count();
+
+            // Pagination
+            $perPage = $request->input('per_page', 20);
+            $page = $request->input('page', 1);
+
+            $collections = $query
+                ->with([
+                    'cycle:cycleId,cycleName',
+                    'assignedToUser:authUserId,userFullName',
+                    'assignedByUser:authUserId,userFullName',
+                    'creator:authUserId,userFullName',
+                    'updater:authUserId,userFullName'
+                ])
+                ->orderBy('litPhoneCollectionId', 'desc')
+                ->offset(($page - 1) * $perPage)
+                ->limit($perPage)
+                ->get();
+
+            // Map to add user full names
+            $collections->each(function($collection) {
+                $collection->cycleName = $collection->cycle->cycleName ?? null;
+                $collection->assignedToUserFullName = $collection->assignedToUser->userFullName ?? null;
+                $collection->assignedByUserFullName = $collection->assignedByUser->userFullName ?? null;
+                $collection->createdByUserFullName = $collection->creator->userFullName ?? null;
+                $collection->updatedByUserFullName = $collection->updater->userFullName ?? null;
+
+                unset(
+                    $collection->cycle,
+                    $collection->assignedToUser,
+                    $collection->assignedByUser,
+                    $collection->creator,
+                    $collection->updater
+                );
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Litigation phone collections retrieved successfully',
+                'pagination' => [
+                    'total' => $total,
+                    'per_page' => $perPage,
+                    'current_page' => $page,
+                    'last_page' => ceil($total / $perPage),
+                    'from' => ($page - 1) * $perPage + 1,
+                    'to' => min($page * $perPage, $total)
+                ],
+                'data' => $collections
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('Failed to retrieve litigation phone collections', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve litigation phone collections',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+}

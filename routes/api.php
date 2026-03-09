@@ -48,3 +48,9 @@ Route::prefix('lit/controller-assignments')->group(function () {
     Route::patch('/{id}/toggle-active', [TblLitControllerLtoController::class, 'toggleActive']);
     Route::delete('/{id}', [TblLitControllerLtoController::class, 'destroy']);
 });
+
+// Litigation Phone Collections
+Route::prefix('lit/phone-collections')->group(function () {
+    Route::get('/', [\App\Http\Controllers\API\TblLitPhoneCollectionController::class, 'index']);
+    Route::post('/', [\App\Http\Controllers\API\TblLitPhoneCollectionController::class, 'store']);
+});

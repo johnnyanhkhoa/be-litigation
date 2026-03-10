@@ -53,4 +53,28 @@ Route::prefix('lit/controller-assignments')->group(function () {
 Route::prefix('lit/phone-collections')->group(function () {
     Route::get('/', [\App\Http\Controllers\API\TblLitPhoneCollectionController::class, 'index']);
     Route::post('/', [\App\Http\Controllers\API\TblLitPhoneCollectionController::class, 'store']);
+
+    // Get payment info
+    Route::get('/{litPhoneCollectionId}/payment-info', [\App\Http\Controllers\API\TblLitPhoneCollectionController::class, 'getPaymentInfo']);
+
+    // Get contract details (must be after /payment-info to avoid route conflict)
+    Route::get('/{litPhoneCollectionId}/contract', [\App\Http\Controllers\API\TblLitPhoneCollectionController::class, 'getContractDetails']);
+});
+
+// Litigation Call Attempts Routes
+Route::prefix('lit-attempts')->group(function () {
+    // Get all call attempts for a specific litigation phone collection
+    Route::get('/{litPhoneCollectionId}', [\App\Http\Controllers\API\TblLitPhoneCollectionDetailController::class, 'getCallAttempts']);
+});
+
+// Litigation Phone Collection Detail Routes
+Route::prefix('lit-phone-collection-details')->group(function () {
+    // Get all active case results (PHẢI ĐẶT TRƯỚC)
+    Route::get('/case-results', [\App\Http\Controllers\API\TblLitPhoneCollectionDetailController::class, 'getCaseResults']);
+
+    // Get remarks by contract (PHẢI ĐẶT TRƯỚC)
+    Route::get('/contract/{contractId}/remarks', [\App\Http\Controllers\API\TblLitPhoneCollectionDetailController::class, 'getRemarksByContract']);
+
+    // Create new Litigation phone collection detail (ĐẶT SAU)
+    Route::post('/', [\App\Http\Controllers\API\TblLitPhoneCollectionDetailController::class, 'store']);
 });

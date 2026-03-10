@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\TblLitPhoneCollection;
 use App\Models\TblLitCycle;
+use App\Services\ExternalApiService;
 use App\Services\UserReferenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,10 +17,14 @@ use Exception;
 class TblLitPhoneCollectionController extends Controller
 {
     protected $userRefService;
+    protected $externalApiService;
 
-    public function __construct(UserReferenceService $userRefService)
-    {
+    public function __construct(
+        UserReferenceService $userRefService,
+        ExternalApiService $externalApiService
+    ) {
         $this->userRefService = $userRefService;
+        $this->externalApiService = $externalApiService;
     }
 
     /**
@@ -327,6 +332,169 @@ class TblLitPhoneCollectionController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to retrieve litigation phone collections',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * GET /api/lit/phone-collections/{litPhoneCollectionId}/contract
+     * Get contract details by litPhoneCollectionId
+     */
+    public function getContractDetails(int $litPhoneCollectionId): JsonResponse
+    {
+        try {
+            // Validate litPhoneCollectionId
+            if ($litPhoneCollectionId <= 0) {
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'Invalid litigation phone collection ID. ID must be a positive integer.',
+                    'data' => null
+                ], 400);
+            }
+
+            Log::info('Looking up litigation contract by litPhoneCollectionId', [
+                'lit_phone_collection_id' => $litPhoneCollectionId
+            ]);
+
+            // Find the phone collection record
+            $phoneCollection = TblLitPhoneCollection::find($litPhoneCollectionId);
+
+            if (!$phoneCollection) {
+                Log::warning('Litigation phone collection record not found', [
+                    'lit_phone_collection_id' => $litPhoneCollectionId
+                ]);
+
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'Litigation phone collection record not found.',
+                    'data' => null
+                ], 404);
+            }
+
+            $contractId = $phoneCollection->contractId;
+
+            Log::info('Found litigation phone collection record', [
+                'lit_phone_collection_id' => $litPhoneCollectionId,
+                'contract_id' => $contractId,
+                'customer_name' => $phoneCollection->customerFullName
+            ]);
+
+            // Fetch contract details from external API using contractId
+            $externalApiService = app(\App\Services\ExternalApiService::class);
+            $contractData = $externalApiService->fetchContractDetails($contractId);
+
+            // If external API failed
+            if (!isset($contractData['status']) || $contractData['status'] !== 1) {
+                return response()->json($contractData, 200);
+            }
+
+            // Combine phone collection data with contract data
+            $combinedData = [
+                'phone_collection' => [
+                    'litPhoneCollectionId' => $phoneCollection->litPhoneCollectionId,
+                    'litCaseId' => $phoneCollection->litCaseId,
+                    'status' => $phoneCollection->status,
+                    'assignedTo' => $phoneCollection->assignedTo,
+                    'assignedBy' => $phoneCollection->assignedBy,
+                    'assignedAt' => $phoneCollection->assignedAt,
+                    'totalAttempts' => $phoneCollection->totalAttempts,
+                    'lastAttemptAt' => $phoneCollection->lastAttemptAt,
+                    'lastAttemptBy' => $phoneCollection->lastAttemptBy,
+                    'cycleId' => $phoneCollection->cycleId,
+                    'dueDate' => $phoneCollection->dueDate,
+                    'daysOverdueGross' => $phoneCollection->daysOverdueGross,
+                    'daysOverdueNet' => $phoneCollection->daysOverdueNet,
+                    'totalOvdAmount' => $phoneCollection->totalOvdAmount,
+                    'paymentStatus' => $phoneCollection->paymentStatus,
+                    'completedBy' => $phoneCollection->completedBy,
+                    'completedAt' => $phoneCollection->completedAt,
+                ],
+                'contract' => $contractData['data']
+            ];
+
+            return response()->json([
+                'status' => 1,
+                'data' => $combinedData,
+                'message' => 'Litigation phone collection with contract details retrieved successfully.'
+            ], 200);
+
+        } catch (Exception $e) {
+            Log::error('Failed to fetch litigation phone collection with contract details', [
+                'lit_phone_collection_id' => $litPhoneCollectionId,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'status' => 0,
+                'message' => 'Unable to fetch litigation phone collection with contract details.',
+                'data' => null
+            ], 500);
+        }
+    }
+
+    /**
+     * GET /api/lit/phone-collections/{litPhoneCollectionId}/payment-info
+     * Get payment information for litigation phone collection
+     */
+    public function getPaymentInfo(int $litPhoneCollectionId): JsonResponse
+    {
+        try {
+            // Validate litPhoneCollectionId
+            if ($litPhoneCollectionId <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid litigation phone collection ID',
+                    'error' => 'ID must be a positive integer'
+                ], 400);
+            }
+
+            Log::info('Fetching payment info for litigation phone collection', [
+                'lit_phone_collection_id' => $litPhoneCollectionId
+            ]);
+
+            // Find litigation phone collection
+            $litPhoneCollection = TblLitPhoneCollection::find($litPhoneCollectionId);
+
+            if (!$litPhoneCollection) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Litigation phone collection not found',
+                ], 404);
+            }
+
+            // Prepare response data
+            $paymentInfo = [
+                'litPhoneCollectionId' => $litPhoneCollection->litPhoneCollectionId,
+                'dueDate' => $litPhoneCollection->dueDate?->format('Y-m-d'),
+                'paymentNo' => $litPhoneCollection->paymentNo,
+                'daysOverdueGross' => $litPhoneCollection->daysOverdueGross,
+                'daysOverdueNet' => $litPhoneCollection->daysOverdueNet,
+                'daysSinceLastPayment' => $litPhoneCollection->daysSinceLastPayment,
+                'lastPaymentDate' => $litPhoneCollection->lastPaymentDate?->format('Y-m-d'),
+                'totalOvdAmount' => $litPhoneCollection->totalOvdAmount,
+                'paymentStatus' => $litPhoneCollection->paymentStatus,
+            ];
+
+            Log::info('Litigation payment info retrieved successfully', [
+                'lit_phone_collection_id' => $litPhoneCollectionId
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Litigation payment information retrieved successfully',
+                'data' => $paymentInfo
+            ], 200);
+
+        } catch (Exception $e) {
+            Log::error('Failed to fetch litigation payment info', [
+                'lit_phone_collection_id' => $litPhoneCollectionId,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve litigation payment information',
                 'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }

@@ -78,3 +78,15 @@ Route::prefix('lit-phone-collection-details')->group(function () {
     // Create new Litigation phone collection detail (ĐẶT SAU)
     Route::post('/', [\App\Http\Controllers\API\TblLitPhoneCollectionDetailController::class, 'store']);
 });
+
+// Litigation Voice Call Routes
+Route::prefix('lit-voice-call')->group(function () {
+    // Initiate call
+    Route::post('/initiate', [\App\Http\Controllers\API\LitVoiceCallController::class, 'initiateCall']);
+
+    // Get call log by apiCallId
+    Route::get('/logs/{apiCallId}', [\App\Http\Controllers\API\LitVoiceCallController::class, 'getCallLog']);
+
+    // Update call log (manual)
+    Route::put('/logs/{apiCallId}', [\App\Http\Controllers\API\LitVoiceCallController::class, 'updateCallLog']);
+});

@@ -499,4 +499,102 @@ class TblLitPhoneCollectionController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * PATCH /api/lit-phone-collections/{litPhoneCollectionId}/complete
+     * Mark a litigation phone collection as completed
+     */
+    public function markAsCompleted(Request $request, int $litPhoneCollectionId): JsonResponse
+    {
+        try {
+            Log::info('Marking Litigation phone collection as completed', [
+                'lit_phone_collection_id' => $litPhoneCollectionId
+            ]);
+
+            // Validate request
+            $validator = Validator::make($request->all(), [
+                'completedBy' => 'required|integer',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $completedBy = $request->input('completedBy');
+
+            // Find phone collection
+            $phoneCollection = TblLitPhoneCollection::find($litPhoneCollectionId);
+
+            if (!$phoneCollection) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Litigation phone collection not found',
+                ], 404);
+            }
+
+            // Check if already completed
+            if ($phoneCollection->status === 'completed') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Phone collection is already completed',
+                    'data' => [
+                        'litPhoneCollectionId' => $phoneCollection->litPhoneCollectionId,
+                        'status' => $phoneCollection->status,
+                        'completedBy' => $phoneCollection->completedBy,
+                        'completedAt' => $phoneCollection->completedAt?->utc()->format('Y-m-d\TH:i:s\Z'),
+                    ]
+                ], 400);
+            }
+
+            // Ensure user exists
+            $this->userRefService->ensureUserExists($completedBy);
+
+            // Update status to completed
+            $phoneCollection->update([
+                'status' => 'completed',
+                'completedBy' => $completedBy,
+                'completedAt' => now()->timezone('Asia/Yangon'),
+                'updatedBy' => $completedBy,
+                'updatedAt' => now()->timezone('Asia/Yangon'),
+            ]);
+
+            Log::info('Litigation phone collection marked as completed', [
+                'lit_phone_collection_id' => $litPhoneCollectionId,
+                'completed_by' => $completedBy
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Phone collection marked as completed successfully',
+                'data' => [
+                    'litPhoneCollectionId' => $phoneCollection->litPhoneCollectionId,
+                    'litCaseId' => $phoneCollection->litCaseId,
+                    'contractId' => $phoneCollection->contractId,
+                    'customerFullName' => $phoneCollection->customerFullName,
+                    'status' => $phoneCollection->status,
+                    'totalAttempts' => $phoneCollection->totalAttempts,
+                    'completedBy' => $phoneCollection->completedBy,
+                    'completedAt' => $phoneCollection->completedAt?->utc()->format('Y-m-d\TH:i:s\Z'),
+                    'updatedAt' => $phoneCollection->updatedAt?->utc()->format('Y-m-d\TH:i:s\Z'),
+                ]
+            ], 200);
+
+        } catch (Exception $e) {
+            Log::error('Failed to mark Litigation phone collection as completed', [
+                'lit_phone_collection_id' => $litPhoneCollectionId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to mark phone collection as completed',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
 }

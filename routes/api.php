@@ -59,6 +59,9 @@ Route::prefix('lit/phone-collections')->group(function () {
 
     // Get contract details (must be after /payment-info to avoid route conflict)
     Route::get('/{litPhoneCollectionId}/contract', [\App\Http\Controllers\API\TblLitPhoneCollectionController::class, 'getContractDetails']);
+
+    // Mark as completed (THÊM DÒNG NÀY)
+    Route::patch('/{litPhoneCollectionId}/complete', [\App\Http\Controllers\API\TblLitPhoneCollectionController::class, 'markAsCompleted']);
 });
 
 // Litigation Call Attempts Routes
@@ -89,4 +92,10 @@ Route::prefix('lit-voice-call')->group(function () {
 
     // Update call log (manual)
     Route::put('/logs/{apiCallId}', [\App\Http\Controllers\API\LitVoiceCallController::class, 'updateCallLog']);
+});
+
+// Litigation Contract Routes
+Route::prefix('lit-contracts')->group(function () {
+    // Get litigation journals
+    Route::get('/{contractId}/litigation-journals', [\App\Http\Controllers\API\TblLitContractController::class, 'getLitigationJournals']);
 });

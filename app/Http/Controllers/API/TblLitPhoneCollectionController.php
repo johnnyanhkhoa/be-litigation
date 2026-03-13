@@ -597,4 +597,136 @@ class TblLitPhoneCollectionController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Export Litigation daily call report
+     * POST /api/lit-phone-collections/export-daily-call-report
+     *
+     * Body: {
+     *   "from": "2026-01-23",
+     *   "to": "2026-01-25",
+     *   "cycleId": 3,
+     *   "emails": ["user1@example.com", "user2@example.com"]
+     * }
+     */
+    public function exportDailyCallReport(\App\Http\Requests\ExportLitDailyCallRequest $request): JsonResponse
+    {
+        try {
+            $fromDate = $request->input('from');
+            $toDate = $request->input('to');
+            $cycleId = $request->input('cycleId');
+            $emails = $request->input('emails');
+
+            // Get authenticated user if available
+            $requestedBy = $request->user()?->authUserId ?? null;
+
+            Log::info('Queueing Litigation daily call export job', [
+                'from_date' => $fromDate,
+                'to_date' => $toDate,
+                'cycle_id' => $cycleId,
+                'emails' => $emails,
+                'requested_by' => $requestedBy
+            ]);
+
+            // Dispatch job to queue
+            \App\Jobs\ExportLitDailyCallReportJob::dispatch(
+                $fromDate,
+                $toDate,
+                $cycleId,
+                $emails,
+                $requestedBy
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Litigation daily call export request queued successfully. You will receive the report via email shortly.',
+                'data' => [
+                    'from_date' => $fromDate,
+                    'to_date' => $toDate,
+                    'cycle_id' => $cycleId,
+                    'emails' => $emails,
+                    'status' => 'queued'
+                ]
+            ], 202);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to queue Litigation daily call export request', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to queue Litigation daily call export request',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Export Litigation call assign report
+     * POST /api/lit-phone-collections/export-call-assign-report
+     *
+     * Body: {
+     *   "from": "2026-01-01",
+     *   "to": "2026-01-31",
+     *   "cycleId": 3,
+     *   "emails": ["user1@example.com", "user2@example.com"]
+     * }
+     */
+    public function exportCallAssignReport(\App\Http\Requests\ExportLitCallAssignRequest $request): JsonResponse
+    {
+        try {
+            $fromDate = $request->input('from');
+            $toDate = $request->input('to');
+            $cycleId = $request->input('cycleId');
+            $emails = $request->input('emails');
+
+            // Get authenticated user if available
+            $requestedBy = $request->user()?->authUserId ?? null;
+
+            Log::info('Queueing Litigation call assign export job', [
+                'from_date' => $fromDate,
+                'to_date' => $toDate,
+                'cycle_id' => $cycleId,
+                'emails' => $emails,
+                'requested_by' => $requestedBy
+            ]);
+
+            // Dispatch job to queue
+            \App\Jobs\ExportLitCallAssignReportJob::dispatch(
+                $fromDate,
+                $toDate,
+                $cycleId,
+                $emails,
+                $requestedBy
+            )
+            ->onConnection('database')
+            ->onQueue('exports');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Litigation call assign export request queued successfully. You will receive the report via email shortly.',
+                'data' => [
+                    'from_date' => $fromDate,
+                    'to_date' => $toDate,
+                    'cycle_id' => $cycleId,
+                    'emails' => $emails,
+                    'status' => 'queued'
+                ]
+            ], 202);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to queue Litigation call assign export request', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to queue Litigation call assign export request',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
 }

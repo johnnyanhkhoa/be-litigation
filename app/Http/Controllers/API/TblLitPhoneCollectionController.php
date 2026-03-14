@@ -635,7 +635,9 @@ class TblLitPhoneCollectionController extends Controller
                 $cycleId,
                 $emails,
                 $requestedBy
-            );
+            )
+            ->onConnection('database')  // ← THÊM DÒNG NÀY
+            ->onQueue('exports');       // ← THÊM DÒNG NÀY
 
             return response()->json([
                 'success' => true,

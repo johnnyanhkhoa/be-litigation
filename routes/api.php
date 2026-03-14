@@ -88,3 +88,10 @@ Route::prefix('monitoring')->group(function () {
     Route::get('/lit-controller/{authUserId}', [\App\Http\Controllers\API\LitMonitoringController::class, 'monitorSingleLitController']);
     Route::get('/lit-controllers', [\App\Http\Controllers\API\LitMonitoringController::class, 'monitorAllLitControllers']);
 });
+
+// Litigation Export Email Management
+Route::prefix('lit-export-emails')->group(function () {
+    Route::get('/', [\App\Http\Controllers\API\LitExportEmailController::class, 'index']);
+    Route::post('/', [\App\Http\Controllers\API\LitExportEmailController::class, 'sync']);
+    Route::delete('/', [\App\Http\Controllers\API\LitExportEmailController::class, 'destroy']);
+});

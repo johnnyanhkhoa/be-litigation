@@ -52,6 +52,7 @@ class TblLitPhoneCollection extends Model
 
         // System fields (for internal use)
         'assignedTo',
+        'assignedFrom',
         'assignedBy',
         'assignedAt',
         'totalAttempts',

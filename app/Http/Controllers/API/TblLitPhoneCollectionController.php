@@ -36,133 +36,158 @@ class TblLitPhoneCollectionController extends Controller
         try {
             // Validate input structure
             $validator = Validator::make($request->all(), [
-                'user_id' => 'required|integer',
-                'collections' => 'required|array|min:1',
-                'collections.*.litCaseId' => 'nullable|integer',
-                'collections.*.status' => 'nullable|string|max:255',
-                'collections.*.contractId' => 'nullable|integer',
-                'collections.*.customerId' => 'nullable|integer',
-                'collections.*.paymentId' => 'nullable|integer',
-                'collections.*.paymentNo' => 'nullable|integer',
-                'collections.*.assetId' => 'nullable|integer',
-                'collections.*.dueDate' => 'nullable|date_format:Y-m-d',
-                'collections.*.daysOverdueGross' => 'nullable|integer',
-                'collections.*.daysOverdueNet' => 'nullable|integer',
-                'collections.*.daysSinceLastPayment' => 'nullable|integer',
-                'collections.*.totalOvdAmount' => 'nullable|integer',
-                'collections.*.contractNo' => 'nullable|string|max:255',
-                'collections.*.contractDate' => 'nullable|date_format:Y-m-d',
-                'collections.*.contractType' => 'nullable|string|max:255',
-                'collections.*.contractingProductType' => 'nullable|string|max:255',
-                'collections.*.customerFullName' => 'nullable|string|max:255',
-                'collections.*.gender' => 'nullable|string|max:50',
-                'collections.*.birthDate' => 'nullable|date_format:Y-m-d',
-                'collections.*.cycleId' => 'required|integer|exists:tbl_LitCycle,cycleId',
-                'collections.*.hasKYCAppAccount' => 'nullable|boolean',
-                'collections.*.customerAge' => 'nullable|integer',
-                'collections.*.contractPlaceName' => 'nullable|string|max:255',
-                'collections.*.salesAreaName' => 'nullable|string|max:255',
-                'collections.*.productName' => 'nullable|string|max:255',
-                'collections.*.productColor' => 'nullable|string|max:255',
-                'collections.*.plateNo' => 'nullable|string|max:255',
-                'collections.*.unitPrice' => 'nullable|string|max:255',
-                'collections.*.paymentStatus' => 'nullable|string|max:255',
-                'collections.*.phoneNo1' => 'nullable|string|max:255',
-                'collections.*.phoneNo2' => 'nullable|string|max:255',
-                'collections.*.phoneNo3' => 'nullable|string|max:255',
-                'collections.*.homeAddress' => 'nullable|string|max:500',
-                'collections.*.salesAreaId' => 'nullable|integer',
-                'collections.*.contractPlaceId' => 'nullable|integer',
-                'collections.*.lastPaymentDate' => 'nullable|date_format:Y-m-d',
-                'collections.*.beelineDistance' => 'nullable|numeric',
-                'collections.*.deviceControlProvider' => 'nullable|string|max:255',
+                'user_id'                               => 'required|integer',
+                'collections'                           => 'required|array|min:1',
+                'collections.*.ltoAuthUserId'           => 'required|integer',
+                'collections.*.litCaseId'               => 'nullable|integer',
+                'collections.*.contractId'              => 'nullable|integer',
+                'collections.*.customerId'              => 'nullable|integer',
+                'collections.*.paymentId'               => 'nullable|integer',
+                'collections.*.paymentNo'               => 'nullable|integer',
+                'collections.*.assetId'                 => 'nullable|integer',
+                'collections.*.dueDate'                 => 'nullable|date_format:Y-m-d',
+                'collections.*.daysOverdueGross'        => 'nullable|integer',
+                'collections.*.daysOverdueNet'          => 'nullable|integer',
+                'collections.*.daysSinceLastPayment'    => 'nullable|integer',
+                'collections.*.totalOvdAmount'          => 'nullable|integer',
+                'collections.*.contractNo'              => 'nullable|string|max:255',
+                'collections.*.contractDate'            => 'nullable|date_format:Y-m-d',
+                'collections.*.contractType'            => 'nullable|string|max:255',
+                'collections.*.contractingProductType'  => 'nullable|string|max:255',
+                'collections.*.customerFullName'        => 'nullable|string|max:255',
+                'collections.*.gender'                  => 'nullable|string|max:50',
+                'collections.*.birthDate'               => 'nullable|date_format:Y-m-d',
+                'collections.*.cycleId'                 => 'required|integer|exists:tbl_LitCycle,cycleId',
+                'collections.*.hasKYCAppAccount'        => 'nullable|boolean',
+                'collections.*.customerAge'             => 'nullable|integer',
+                'collections.*.contractPlaceName'       => 'nullable|string|max:255',
+                'collections.*.salesAreaName'           => 'nullable|string|max:255',
+                'collections.*.productName'             => 'nullable|string|max:255',
+                'collections.*.productColor'            => 'nullable|string|max:255',
+                'collections.*.plateNo'                 => 'nullable|string|max:255',
+                'collections.*.unitPrice'               => 'nullable|string|max:255',
+                'collections.*.paymentStatus'           => 'nullable|string|max:255',
+                'collections.*.phoneNo1'                => 'nullable|string|max:255',
+                'collections.*.phoneNo2'                => 'nullable|string|max:255',
+                'collections.*.phoneNo3'                => 'nullable|string|max:255',
+                'collections.*.homeAddress'             => 'nullable|string|max:500',
+                'collections.*.salesAreaId'             => 'nullable|integer',
+                'collections.*.contractPlaceId'         => 'nullable|integer',
+                'collections.*.lastPaymentDate'         => 'nullable|date_format:Y-m-d',
+                'collections.*.beelineDistance'         => 'nullable|numeric',
+                'collections.*.deviceControlProvider'   => 'nullable|string|max:255',
             ]);
 
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
-                    'errors' => $validator->errors()
+                    'errors'  => $validator->errors()
                 ], 422);
             }
 
             // Ensure user exists
             $this->userRefService->ensureUserExists($request->user_id);
 
+            // Pre-load controller mapping per (ltoId, cycleId) for round-robin
+            // Structure: [ "$ltoId-$cycleId" => [ controllerId, ... ] ]
+            $roundRobinCounters = [];
+
             DB::beginTransaction();
 
             $created = [];
-            $errors = [];
+            $errors  = [];
 
             foreach ($request->collections as $index => $collectionData) {
                 try {
-                    // Prepare data for creation (exclude restricted fields)
-                    $data = [
-                        'litCaseId' => $collectionData['litCaseId'] ?? null,
-                        'status' => $collectionData['status'] ?? 'pending',
-                        'contractId' => $collectionData['contractId'] ?? null,
-                        'customerId' => $collectionData['customerId'] ?? null,
-                        'paymentId' => $collectionData['paymentId'] ?? null,
-                        'paymentNo' => $collectionData['paymentNo'] ?? null,
-                        'assetId' => $collectionData['assetId'] ?? null,
-                        'dueDate' => $collectionData['dueDate'] ?? null,
-                        'daysOverdueGross' => $collectionData['daysOverdueGross'] ?? null,
-                        'daysOverdueNet' => $collectionData['daysOverdueNet'] ?? null,
-                        'daysSinceLastPayment' => $collectionData['daysSinceLastPayment'] ?? null,
-                        'totalOvdAmount' => $collectionData['totalOvdAmount'] ?? null,
-                        'contractNo' => $collectionData['contractNo'] ?? null,
-                        'contractDate' => $collectionData['contractDate'] ?? null,
-                        'contractType' => $collectionData['contractType'] ?? null,
-                        'contractingProductType' => $collectionData['contractingProductType'] ?? null,
-                        'customerFullName' => $collectionData['customerFullName'] ?? null,
-                        'gender' => $collectionData['gender'] ?? null,
-                        'birthDate' => $collectionData['birthDate'] ?? null,
-                        'cycleId' => $collectionData['cycleId'],
-                        'hasKYCAppAccount' => $collectionData['hasKYCAppAccount'] ?? false,
-                        'customerAge' => $collectionData['customerAge'] ?? null,
-                        'contractPlaceName' => $collectionData['contractPlaceName'] ?? null,
-                        'salesAreaName' => $collectionData['salesAreaName'] ?? null,
-                        'productName' => $collectionData['productName'] ?? null,
-                        'productColor' => $collectionData['productColor'] ?? null,
-                        'plateNo' => $collectionData['plateNo'] ?? null,
-                        'unitPrice' => $collectionData['unitPrice'] ?? null,
-                        'paymentStatus' => $collectionData['paymentStatus'] ?? null,
-                        'phoneNo1' => $collectionData['phoneNo1'] ?? null,
-                        'phoneNo2' => $collectionData['phoneNo2'] ?? null,
-                        'phoneNo3' => $collectionData['phoneNo3'] ?? null,
-                        'homeAddress' => $collectionData['homeAddress'] ?? null,
-                        'salesAreaId' => $collectionData['salesAreaId'] ?? null,
-                        'contractPlaceId' => $collectionData['contractPlaceId'] ?? null,
-                        'lastPaymentDate' => $collectionData['lastPaymentDate'] ?? null,
-                        'beelineDistance' => $collectionData['beelineDistance'] ?? null,
-                        'deviceControlProvider' => $collectionData['deviceControlProvider'] ?? null,
+                    $ltoAuthUserId = $collectionData['ltoAuthUserId'];
+                    $cycleId       = $collectionData['cycleId'];
 
-                        // System fields (auto-set)
-                        'assignedTo' => null,
-                        'assignedBy' => null,
-                        'assignedAt' => null,
-                        'totalAttempts' => 0,
-                        'lastAttemptAt' => null,
-                        'lastAttemptBy' => null,
-                        'createdAt' => now()->timezone('Asia/Yangon'),
-                        'createdBy' => $request->user_id,
-                        'updatedAt' => null,
-                        'updatedBy' => null,
-                        'deletedAt' => null,
-                        'deletedBy' => null,
-                        'deletedReason' => null,
-                        'completedBy' => null,
-                        'completedAt' => null,
+                    // Resolve controllerId via tbl_LitControllerLto
+                    $cacheKey    = "{$ltoAuthUserId}-{$cycleId}";
+                    $controllers = \App\Models\TblLitControllerLto::where('ltoId', $ltoAuthUserId)
+                        ->where('cycleId', $cycleId)
+                        ->where('active', true)
+                        ->orderBy('id')
+                        ->pluck('controllerId')
+                        ->toArray();
+
+                    $assignedTo = null;
+                    if (!empty($controllers)) {
+                        $counter    = $roundRobinCounters[$cacheKey] ?? 0;
+                        $assignedTo = $controllers[$counter % count($controllers)];
+                        $roundRobinCounters[$cacheKey] = $counter + 1;
+                    }
+
+                    $data = [
+                        'litCaseId'              => $collectionData['litCaseId'] ?? null,
+                        'status'                 => 'pending',
+                        'contractId'             => $collectionData['contractId'] ?? null,
+                        'customerId'             => $collectionData['customerId'] ?? null,
+                        'paymentId'              => $collectionData['paymentId'] ?? null,
+                        'paymentNo'              => $collectionData['paymentNo'] ?? null,
+                        'assetId'               => $collectionData['assetId'] ?? null,
+                        'dueDate'               => $collectionData['dueDate'] ?? null,
+                        'daysOverdueGross'       => $collectionData['daysOverdueGross'] ?? null,
+                        'daysOverdueNet'         => $collectionData['daysOverdueNet'] ?? null,
+                        'daysSinceLastPayment'   => $collectionData['daysSinceLastPayment'] ?? null,
+                        'totalOvdAmount'         => $collectionData['totalOvdAmount'] ?? null,
+                        'contractNo'             => $collectionData['contractNo'] ?? null,
+                        'contractDate'           => $collectionData['contractDate'] ?? null,
+                        'contractType'           => $collectionData['contractType'] ?? null,
+                        'contractingProductType' => $collectionData['contractingProductType'] ?? null,
+                        'customerFullName'       => $collectionData['customerFullName'] ?? null,
+                        'gender'                => $collectionData['gender'] ?? null,
+                        'birthDate'             => $collectionData['birthDate'] ?? null,
+                        'cycleId'               => $cycleId,
+                        'hasKYCAppAccount'       => $collectionData['hasKYCAppAccount'] ?? false,
+                        'customerAge'            => $collectionData['customerAge'] ?? null,
+                        'contractPlaceName'      => $collectionData['contractPlaceName'] ?? null,
+                        'salesAreaName'          => $collectionData['salesAreaName'] ?? null,
+                        'productName'            => $collectionData['productName'] ?? null,
+                        'productColor'           => $collectionData['productColor'] ?? null,
+                        'plateNo'               => $collectionData['plateNo'] ?? null,
+                        'unitPrice'             => $collectionData['unitPrice'] ?? null,
+                        'paymentStatus'          => $collectionData['paymentStatus'] ?? null,
+                        'phoneNo1'              => $collectionData['phoneNo1'] ?? null,
+                        'phoneNo2'              => $collectionData['phoneNo2'] ?? null,
+                        'phoneNo3'              => $collectionData['phoneNo3'] ?? null,
+                        'homeAddress'           => $collectionData['homeAddress'] ?? null,
+                        'salesAreaId'            => $collectionData['salesAreaId'] ?? null,
+                        'contractPlaceId'        => $collectionData['contractPlaceId'] ?? null,
+                        'lastPaymentDate'        => $collectionData['lastPaymentDate'] ?? null,
+                        'beelineDistance'        => $collectionData['beelineDistance'] ?? null,
+                        'deviceControlProvider'  => $collectionData['deviceControlProvider'] ?? null,
+
+                        // Assignment
+                        'assignedTo'   => $assignedTo,
+                        'assignedFrom' => $ltoAuthUserId,
+                        'assignedBy'   => null,
+                        'assignedAt'   => null,
+
+                        // System fields
+                        'totalAttempts'  => 0,
+                        'lastAttemptAt'  => null,
+                        'lastAttemptBy'  => null,
+                        'createdAt'      => now()->timezone('Asia/Yangon'),
+                        'createdBy'      => $request->user_id,
+                        'updatedAt'      => null,
+                        'updatedBy'      => null,
+                        'deletedAt'      => null,
+                        'deletedBy'      => null,
+                        'deletedReason'  => null,
+                        'completedBy'    => null,
+                        'completedAt'    => null,
                     ];
 
                     $collection = TblLitPhoneCollection::create($data);
-                    $created[] = $collection;
+                    $created[]  = $collection;
 
                 } catch (Exception $e) {
                     $errors[] = [
-                        'index' => $index,
+                        'index'      => $index,
                         'contractNo' => $collectionData['contractNo'] ?? 'unknown',
-                        'error' => $e->getMessage()
+                        'error'      => $e->getMessage()
                     ];
                 }
             }
@@ -171,9 +196,9 @@ class TblLitPhoneCollectionController extends Controller
 
             Log::info('Litigation phone collections created', [
                 'total_requested' => count($request->collections),
-                'created' => count($created),
-                'failed' => count($errors),
-                'created_by' => $request->user_id
+                'created'         => count($created),
+                'failed'          => count($errors),
+                'created_by'      => $request->user_id
             ]);
 
             $response = [
@@ -181,8 +206,8 @@ class TblLitPhoneCollectionController extends Controller
                 'message' => 'Litigation phone collections created',
                 'summary' => [
                     'total_requested' => count($request->collections),
-                    'created' => count($created),
-                    'failed' => count($errors)
+                    'created'         => count($created),
+                    'failed'          => count($errors)
                 ],
                 'data' => $created
             ];
@@ -203,7 +228,7 @@ class TblLitPhoneCollectionController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create litigation phone collections',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+                'error'   => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }
